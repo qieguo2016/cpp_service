@@ -21,7 +21,6 @@ RUN cd /home \
     && ./autogen.sh --prefix=/opt/jemalloc \ 
     && make -j 16 \ 
     && make install \ 
-    && cd /opt \ 
     && rm -rf /home/jemalloc
 
 # # zookeeper
@@ -58,11 +57,11 @@ RUN cd /opt \
 #         && rm -rf /home/rapidjson
 
 # # protobuf
-# RUN cd /opt \
-#         && wget https://github.com/protocolbuffers/protobuf/releases/download/v3.16.0/protobuf-cpp-3.16.0.tar.gz \
-#         && mkdir /opt/protobuf && tar -zxvf protobuf-cpp-3.16.0.tar.gz \
-#         && cd /opt/protobuf-3.16.0 &&./autogen.sh && ./configure --prefix=/opt/protobuf && make -j 16 && make install && ldconfig \
-#         && rm -rf /opt/protobuf-cpp-3.16.0.tar.gz /opt/protobuf-3.16.0/
+RUN cd /home \
+        && wget https://github.com/protocolbuffers/protobuf/releases/download/v3.16.0/protobuf-cpp-3.16.0.tar.gz \
+        && tar -zxvf protobuf-cpp-3.16.0.tar.gz \
+        && cd /home/protobuf-3.16.0 &&./autogen.sh && ./configure --prefix=/opt/protobuf && make -j 16 && make install && ldconfig \
+        && rm -rf /home/protobuf-cpp-3.16.0.tar.gz /home/protobuf-3.16.0/
 
 # # gtest
 # RUN cd /home \
@@ -75,6 +74,24 @@ RUN cd /opt \
 #         && cp -r ../googletest/include /opt/gtest \
 #         && rm -rf /home/googletest
 
+# gflags
+RUN cd /home \
+        && git clone -b v2.2.2 https://github.com/gflags/gflags.git \
+        && cd gflags && mkdir build && cd build \
+        && CXXFLAGS=-fPIC cmake -DCMAKE_INSTALL_PREFIX=/opt/gflags -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC_LIBS=ON -DCMAKE_CXX_STANDARD=17 -DBUILD_TESTING=OFF .. \
+        && make -j 16 \
+        && make install \
+        && rm -rf /home/gflags
+
+# glog
+RUN cd /home \
+        && git clone -b v0.6.0 https://github.com/google/glog.git \
+        && cd glog && mkdir build && cd build \
+        && cmake -DCMAKE_INSTALL_PREFIX=/opt/glog  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_TESTING=OFF -DWITH_GTEST=ON -DWITH_GFLAGS=ON -Dgflags_DIR=/opt/gflags --build .. \
+        && make -j 16 \
+        && make install \
+        && rm -rf /home/glog
+
 # # librdkafka
 # RUN cd /home \
 #         && git clone -b v1.8.0 https://github.com/edenhill/librdkafka \
@@ -85,13 +102,13 @@ RUN cd /opt \
 #         && make install \
 #         && rm -rf /home/librdkafka
 
-# # brpc
-# RUN cd /home \
-#         && git clone -b 1.4.0 https://github.com/apache/brpc.git \
-#         && cd brpc && mkdir build && cd build \
-#         && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/brpc -DBUILD_SHARED_LIBS=OFF -DCMAKE_CXX_STANDARD=17 .. \
-#         && make -j 16 \
-#         && make install \
-#         && rm -rf /home/brpc
+# brpc
+RUN cd /home \
+        && git clone -b 1.4.0 https://github.com/apache/brpc.git \
+        && cd brpc && mkdir build && cd build \
+        && cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/brpc -DBUILD_SHARED_LIBS=OFF -DWITH_GTEST=OFF -DWITH_GFLAGS=ON -DWITH_SNAPPY=ON -DGFLAGS_ROOT=/opt/gflags -DProtobuf_ROOT=/opt/protobuf -DCMAKE_CXX_STANDARD=17 -DWITH_GLOG=ON --build .. \
+        && make -j 16 \
+        && make install \
+        && rm -rf /home/brpc
         
 ENV IMAGE_VERSION=v0.0.1
