@@ -1,0 +1,17 @@
+syntax="proto3";
+package recommend;
+
+option cc_generic_services = true;
+
+message RecommendRequest {
+      optional int64 user_id = 1;
+};
+
+message RecommendResponse {
+      optional int32 code = 1;
+      optional string message = 2;
+};
+
+service RecommendService {
+      rpc Recommend(RecommendRequest) returns (RecommendResponse);
+};

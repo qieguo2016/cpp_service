@@ -1,21 +1,24 @@
 #pragma once
 
+#include "glog/logging.h"
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <memory>
+#include <ostream>
 namespace cpp_service {
 namespace cache {
 
 size_t GetValidBucketCount(size_t cap) {
-  const size_t count = 26;
+  const size_t count = 27;
   static const size_t nums[count] = {
-      16,       32,        64,        128,       512,       1024,     2048,
-      4096,     8192,      16384,     32768,     65536,     131072,   262144,
-      524288,   1048576,   2097152,   4194304,   8388608,   16777216, 33554432,
-      67108864, 134217728, 268435456, 536870912, 1073741824};
+      8,        16,       32,        64,        128,       512,       1024,
+      2048,     4096,     8192,      16384,     32768,     65536,     131072,
+      262144,   524288,   1048576,   2097152,   4194304,   8388608,   16777216,
+      33554432, 67108864, 134217728, 268435456, 536870912, 1073741824};
   size_t i = 0;
   for (i = 0; i < count; i++) {
-    if (nums[i] > cap) {
+    if (nums[i] >= cap) {
       return nums[i];
     }
   }
@@ -31,11 +34,11 @@ template <typename K, typename V> struct Node {
   uint32_t refs; // References, including cache reference, if present.
   uint32_t hash; // Hash of key(); used for fast sharding and comparisons
   uint32_t expire_ts;
-  K *key;
-  V *value;
+  K key;
+  V value;
 
-  Node(uint32_t hash_, K *key_, V *value_)
-      : hash(hash_), key(key_), value(value_) {}
+  Node(uint32_t hash_, K &key_, V &value_)
+      : hash(hash_), key(std::move(key_)), value(std::move(value_)) {}
 };
 
 template <typename K, typename V> class HashTable {
@@ -46,7 +49,10 @@ public:
   HashTable(uint32_t cap) : cap_(cap), size_(0), buckets_(nullptr) {
     // 取比cap大的第一个2^n次方
     size_t buckets_count = GetValidBucketCount(cap);
+    LOG(INFO) << "hash table buckets count=" << buckets_count;
     buckets_ = new NodeRef *[buckets_count];
+    memset(buckets_, 0, sizeof(buckets_[0]) * buckets_count);
+    cap_ = buckets_count;
   };
 
   ~HashTable() { delete[] buckets_; };
@@ -55,15 +61,15 @@ public:
     return *FindPointer(key, hash);
   };
 
-  void Insert(const K &key, uint32_t hash, V &value) {
+  void Insert(K &key, uint32_t hash, V &value) {
     NodeRef **ptr = FindPointer(key, hash);
     NodeRef *old = *ptr;
     if (old != nullptr) {
-      old->value = &value;
+      old->value = value;
       return;
     }
 
-    NodeRef *node = new NodeRef(hash, const_cast<K *>(&key), &value);
+    NodeRef *node = new NodeRef(hash, key, value);
     node->next_hash = (old == nullptr ? nullptr : old->next_hash);
     *ptr = node;
     ++size_;
@@ -88,7 +94,7 @@ private:
   // pointer to the trailing slot in the corresponding linked list.
   NodeRef **FindPointer(const K &key, uint32_t hash) {
     NodeRef **ptr = &buckets_[hash & (cap_ - 1)];
-    while (*ptr != nullptr && ((*ptr)->hash != hash || key != *(*ptr)->key)) {
+    while (*ptr != nullptr && ((*ptr)->hash != hash || (*ptr)->key != key)) {
       ptr = &(*ptr)->next_hash;
     }
     return ptr;

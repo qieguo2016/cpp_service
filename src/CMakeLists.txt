@@ -10,7 +10,7 @@ link_directories(${DOCKER_PREBUILD_DIR}/gflags/lib)
 link_directories(${DOCKER_PREBUILD_DIR}/glog/lib)
 link_directories(${DOCKER_PREBUILD_DIR}/jemalloc/lib)
 
-set(DYNAMIC_LIB
+set(EXTERN_LIB
     # librdkafka++.a librdkafka.a liblua.a 
     libbrpc.a 
     # fmt::fmt 
@@ -23,15 +23,15 @@ set(DYNAMIC_LIB
 
 # source code
 FILE(GLOB source_codes
-    ${CMAKE_CURRENT_LIST_DIR}/*/*.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/*/*.cc
 )
 FILE(GLOB header_codes
     ${CMAKE_CURRENT_LIST_DIR}/*/*.h
 )
 add_library(service_src STATIC ${source_codes} ${header_codes})
-target_link_libraries(service_src ${DYNAMIC_LIB})
+target_link_libraries(service_src ${EXTERN_LIB})
 
-add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/main.cpp)
+add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/main.cc)
 target_link_libraries(${PROJECT_NAME} -Wl,--whole-archive service_src -Wl,--no-whole-archive)
 target_link_libraries(${PROJECT_NAME} libjemalloc.a)
 

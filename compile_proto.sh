@@ -1,0 +1,1 @@
+protoc -I proto --cpp_out=src/proto_gen recommend.proto
