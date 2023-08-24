@@ -1,6 +1,6 @@
 #pragma once
 
-#include "src/proto_gen/recommend.pb.h"
+#include "proto_gen/recommend.pb.h"
 
 namespace cpp_service {
 namespace server {
