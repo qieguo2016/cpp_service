@@ -12,14 +12,10 @@ enum DataType {
   INT16 = 3,
 
 };
-enum MultiType {
+enum RepeatType {
   SINGLE = 0,
   FIX_LENGTH = 1,
   VAR_LENGTH = 2,
 };
-
-decltype(auto) getType(DataType typ) {
-  
-}
 
 } // namespace index_lib
