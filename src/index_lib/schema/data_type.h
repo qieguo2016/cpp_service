@@ -12,8 +12,8 @@ enum DataType {
   INT16 = 3,
 
 };
-enum RepeatType {
-  SINGLE = 0,
+enum FieldType {
+  BASIC = 0,
   FIX_LENGTH = 1,
   VAR_LENGTH = 2,
 };

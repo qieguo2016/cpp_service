@@ -26,6 +26,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O2 -Wall -g -ggdb -fno-omit-frame-p
 set(THIRD_PARTY_PATH ${CMAKE_BINARY_DIR}/third_party)
 set(THIRD_PARTY_BUILD_TYPE RELEASE)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 # extern lib
 # include(brpc)
 
