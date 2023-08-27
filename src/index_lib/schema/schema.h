@@ -3,125 +3,48 @@
 #include "index_lib/schema/data_type.h"
 #include "third_party/parallel_hashmap/phmap.h"
 #include <cstdint>
-#include <google/protobuf/descriptor.h>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace index_lib {
-
-// template <int>
-// struct EndianHelper;
-
-// template <>
-// struct EndianHelper<1> {
-//   static uint8_t Load(const void* p) { return *static_cast<const
-//   uint8_t*>(p); }
-// };
-
-// template <>
-// struct EndianHelper<2> {
-//   static uint16_t Load(const void* p) {
-//     uint16_t tmp;
-//     std::memcpy(&tmp, p, 2);
-// #ifndef PROTOBUF_LITTLE_ENDIAN
-//     tmp = bswap_16(tmp);
-// #endif
-//     return tmp;
-//   }
-// };
-
-// template <>
-// struct EndianHelper<4> {
-//   static uint32_t Load(const void* p) {
-//     uint32_t tmp;
-//     std::memcpy(&tmp, p, 4);
-// #ifndef PROTOBUF_LITTLE_ENDIAN
-//     tmp = bswap_32(tmp);
-// #endif
-//     return tmp;
-//   }
-// };
-
-// template <>
-// struct EndianHelper<8> {
-//   static uint64_t Load(const void* p) {
-//     uint64_t tmp;
-//     std::memcpy(&tmp, p, 8);
-// #ifndef PROTOBUF_LITTLE_ENDIAN
-//     tmp = bswap_64(tmp);
-// #endif
-//     return tmp;
-//   }
-// };
-
-// //   uint64 value = UnalignedLoad<uint64>(ptr);
-// template <typename T>
-// T UnalignedLoad(const char* p) {
-//   auto tmp = EndianHelper<sizeof(T)>::Load(p);
-//   T res;
-//   memcpy(&res, &tmp, sizeof(T));
-//   return res;
-// }
 
 struct FieldDescriptor {
   uint16_t id;
   std::string name;
   DataType dtype;
-  RepeatType rtype;
+  FieldType ftype;
   uint16_t byte_offset;
   uint16_t byte_len;
 };
 
-inline uint16_t UNALIGNED_LOAD16(const void *p) {
-  uint16_t t;
-  memcpy(&t, p, sizeof t);
-  return t;
-}
+// template <typename T>
+// struct RefTypeTraits<T,
+//                      typename std::enable_if<is_proto_enum<T>::value>::type>
+//                      {
+//   typedef RepeatedFieldRefIterator<T> iterator;
+//   typedef RepeatedFieldAccessor AccessorType;
+//   // We use int32 for repeated enums in RepeatedFieldAccessor.
+//   typedef int32 AccessorValueType;
+//   typedef T IteratorValueType;
+//   typedef int32 *IteratorPointerType;
+//   static constexpr FieldDescriptor::CppType cpp_type =
+//       FieldDescriptor::CPPTYPE_ENUM;
+//   static const Descriptor *GetMessageFieldDescriptor() { return NULL; }
+// };
 
-inline uint32_t UNALIGNED_LOAD32(const void *p) {
-  uint32_t t;
-  memcpy(&t, p, sizeof t);
-  return t;
-}
-
-inline uint64_t UNALIGNED_LOAD64(const void *p) {
-  uint64_t t;
-  memcpy(&t, p, sizeof t);
-  return t;
-}
-
-inline void UNALIGNED_STORE16(void *p, uint16_t v) { memcpy(p, &v, sizeof v); }
-
-inline void UNALIGNED_STORE32(void *p, uint32_t v) { memcpy(p, &v, sizeof v); }
-
-inline void UNALIGNED_STORE64(void *p, uint64_t v) { memcpy(p, &v, sizeof v); }
-
-template <typename T>
-struct RefTypeTraits<
-    T, typename std::enable_if<is_proto_enum<T>::value>::type> {
-  typedef RepeatedFieldRefIterator<T> iterator;
-  typedef RepeatedFieldAccessor AccessorType;
-  // We use int32 for repeated enums in RepeatedFieldAccessor.
-  typedef int32 AccessorValueType;
-  typedef T IteratorValueType;
-  typedef int32* IteratorPointerType;
-  static constexpr FieldDescriptor::CppType cpp_type =
-      FieldDescriptor::CPPTYPE_ENUM;
-  static const Descriptor* GetMessageFieldDescriptor() { return NULL; }
-};
-
-template <typename T>
-struct RefTypeTraits<
-    T, typename std::enable_if<std::is_same<std::string, T>::value>::type> {
-  typedef RepeatedFieldRefIterator<T> iterator;
-  typedef RepeatedFieldAccessor AccessorType;
-  typedef std::string AccessorValueType;
-  typedef const std::string IteratorValueType;
-  typedef const std::string* IteratorPointerType;
-  static constexpr FieldDescriptor::CppType cpp_type =
-      FieldDescriptor::CPPTYPE_STRING;
-  static const Descriptor* GetMessageFieldDescriptor() { return NULL; }
-};
+// template <typename T>
+// struct RefTypeTraits<
+//     T, typename std::enable_if<std::is_same<std::string, T>::value>::type> {
+//   typedef RepeatedFieldRefIterator<T> iterator;
+//   typedef RepeatedFieldAccessor AccessorType;
+//   typedef std::string AccessorValueType;
+//   typedef const std::string IteratorValueType;
+//   typedef const std::string *IteratorPointerType;
+//   static constexpr FieldDescriptor::CppType cpp_type =
+//       FieldDescriptor::CPPTYPE_STRING;
+//   static const Descriptor *GetMessageFieldDescriptor() { return NULL; }
+// };
 
 class Schema {
 public:
