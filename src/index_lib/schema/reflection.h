@@ -1,8 +1,10 @@
 #pragma once
 
 #include "index_lib/schema/data_type.h"
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -10,189 +12,120 @@
 
 namespace index_lib {
 
-template <int> struct EndianHelper;
+// #ifndef PROTOBUF_LITTLE_ENDIAN
+//     tmp = bswap_64(tmp);
+// #endif
 
-template <> struct EndianHelper<1> {
-  static uint8_t Load(const void *p) {
-    return *static_cast<const uint8_t *>(p);
-  }
-  static bool Store(void *p, uint8_t v) {
-    auto tmp = memcpy(p, &v, sizeof v);
-    return tmp != nullptr;
-  }
+template <typename T, typename... Types> struct IsVectorType {
+  static const bool value = false;
 };
 
-template <> struct EndianHelper<2> {
-  static uint16_t Load(const void *p) {
-    uint16_t tmp;
-    std::memcpy(&tmp, p, 2);
-    // #ifndef PROTOBUF_LITTLE_ENDIAN
-    //     tmp = bswap_16(tmp);
-    // #endif
-    return tmp;
-  }
-  static bool Store(void *p, uint16_t v) {
-    auto tmp = memcpy(p, &v, sizeof v);
-    return tmp != nullptr;
-  }
+template <typename T, typename... Types>
+struct IsVectorType<std::vector<T, Types...>> {
+  static const bool value = true;
 };
 
-template <> struct EndianHelper<4> {
-  static uint32_t Load(const void *p) {
-    uint32_t tmp;
-    std::memcpy(&tmp, p, 4);
-    // #ifndef PROTOBUF_LITTLE_ENDIAN
-    //     tmp = bswap_32(tmp);
-    // #endif
-    return tmp;
-  }
-  static bool Store(void *p, uint32_t v) {
-    auto tmp = memcpy(p, &v, sizeof v);
-    return tmp != nullptr;
-  }
-};
+template <typename T>
+inline constexpr bool is_number =
+    std::is_integral<T>::value || std::is_floating_point<T>::value;
 
-template <> struct EndianHelper<8> {
-  static uint64_t Load(const void *p) {
-    uint64_t tmp;
-    std::memcpy(&tmp, p, 8);
-    // #ifndef PROTOBUF_LITTLE_ENDIAN
-    //     tmp = bswap_64(tmp);
-    // #endif
-    return tmp;
-  }
-  static bool Store(void *p, uint64_t v) {
-    auto tmp = memcpy(p, &v, sizeof v);
-    return tmp != nullptr;
-  }
-};
-
-// inline void UnalignedStore8(void *p, uint8_t v) { memcpy(p, &v, sizeof v); }
-
-// inline void UnalignedStore16(void *p, uint16_t v) { memcpy(p, &v, sizeof v);
-// }
-
-// inline void UnalignedStore32(void *p, uint32_t v) { memcpy(p, &v, sizeof v);
-// }
-
-// inline void UnalignedStore64(void *p, uint64_t v) { memcpy(p, &v, sizeof v);
-// }
-
-// template <typename T> T UnalignedLoad(const char *p) {
-//   return EndianHelper<sizeof(T)>::Load(p);
-//   // T res;
-//   // memcpy(&res, &tmp, sizeof(T));
-//   // return res;
-// }
-
-// inline uint8_t UnalignedLoad8(const void *p) {
-//   return *static_cast<const uint8_t *>(p);
-// }
-
-// inline uint16_t UnalignedLoad16(const void *p) {
-//   uint16_t t;
-//   memcpy(&t, p, sizeof t);
-//   return t;
-// }
-
-// inline uint32_t UnalignedLoad32(const void *p) {
-//   uint32_t t;
-//   memcpy(&t, p, sizeof t);
-//   return t;
-// }
-
-// inline uint64_t UnalignedLoad64(const void *p) {
-//   uint64_t t;
-//   memcpy(&t, p, sizeof t);
-//   return t;
-// }
-
+/*
+ * Reflection
+ * 1. 列表最大长度为255(uint8)
+ * 2. 写入不保证原子性，尤其是列表写入
+ * 3. bool占1个byte，上层可用多个bool组合成一个byte
+ */
 class Reflection {
 public:
-  // todo: 需要区分signed和unsigned
   template <typename T>
-  typename std::enable_if<std::is_integral<T>::value, T>::type
+  inline typename std::enable_if<is_number<T>, T>::type
   get(const char *data) const {
-    return EndianHelper<sizeof(T)>::Load(data);
+    T tmp;
+    std::memcpy(&tmp, data, sizeof(T));
+    return tmp;
   }
 
   template <typename T>
-  typename std::enable_if<std::is_integral<T>::value, bool>::type
+  inline typename std::enable_if<is_number<T>, bool>::type
   set(char *data, const T &value) const {
-    return EndianHelper<sizeof(T)>::Store(data, value);
+    return memcpy(data, &value, sizeof(value)) != nullptr;
   }
 
   template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value &&
-                              std::is_same<T, float>::value,
-                          T>::type
+  inline typename std::enable_if<std::is_same<T, std::string>::value, T>::type
   get(const char *data) const {
-    uint32_t tmp = EndianHelper<sizeof(uint32_t)>::Load(data);
-    return (*(float *)(&tmp));
+    uint8_t num = get<uint8_t>(data);
+    return std::string(data + 1, num);
   }
 
   template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value &&
-                              std::is_same<T, float>::value,
-                          bool>::type
-  set(char *data, const T &value) const {
-    uint32_t tmp = (*(uint32_t *)(&value));
-    return EndianHelper<sizeof(uint32_t)>::Store(data, tmp);
+  inline
+      typename std::enable_if<std::is_same<T, std::string>::value, bool>::type
+      set(char *data, const T &value) const {
+    uint8_t num = value.size();
+    if (!set<uint8_t>(data, num)) {
+      return false;
+    }
+    return memcpy(data + 1, value.c_str(), num) != nullptr;
   }
 
   template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value &&
-                              std::is_same<T, double>::value,
-                          T>::type
+  inline typename std::enable_if<
+      IsVectorType<T>::value && is_number<typename T::value_type>, T>::type
   get(const char *data) const {
-    uint64_t tmp = EndianHelper<sizeof(uint64_t)>::Load(data);
-    return (*(double *)(&tmp));
+    uint8_t num = get<uint8_t>(data);
+    using ET = typename T::value_type;
+    std::vector<ET> ret(num);
+    memcpy(ret.data(), data + 1, num * sizeof(ET));
+    return ret;
   }
 
   template <typename T>
-  typename std::enable_if<std::is_floating_point<T>::value &&
-                              std::is_same<T, double>::value,
-                          bool>::type
+  inline typename std::enable_if<
+      IsVectorType<T>::value && is_number<typename T::value_type>, bool>::type
   set(char *data, const T &value) const {
-    uint64_t tmp = (*(uint64_t *)(&value));
-    return EndianHelper<sizeof(uint64_t)>::Store(data, tmp);
+    uint8_t num = value.size();
+    if (!set<uint8_t>(data, num)) {
+      return false;
+    }
+    using ET = typename T::value_type;
+    return memcpy(data + 1, value.data(), num * sizeof(ET)) != nullptr;
   }
 
-private:
-  // template <typename T>
-  // T _get(const char *data, const uint16_t bytes_offset) const {
-  //   throw std::invalid_argument("unsupported type");
-  // }
+  template <typename T>
+  inline typename std::enable_if<
+      IsVectorType<T>::value &&
+          std::is_same<typename T::value_type, std::string>::value,
+      T>::type
+  get(const char *data) const {
+    uint8_t num = get<uint8_t>(data);
+    std::vector<std::string> ret(num);
+    uint32_t offset = 1; // 1 byte for num
+    for (int i = 0; i < num; i++) {
+      ret[i] = get<std::string>(data + offset);
+      offset += ret[i].size() + 1;
+    }
+    return ret;
+  }
 
-  // template <>
-  // std::string _get<std::string>(const char *data,
-  //                               const uint16_t bytes_offset) const {
-  //   std::string d;
-  //   uint8_t string_size = UnalignedLoad8(data);
-
-  //   d.reserve(string_size);
-  //   uint8_t c;
-  //   for (size_t i = 0; i < string_size; ++i) {
-  //     c = _get<uint8_t>(data, 8, bytes_offset + i + 1);
-  //     d.push_back(c);
-  //   }
-  //   return d;
-  // }
-
-  // template <typename T>
-  //     typename std::enable_if < std::is_integral<T>::value,
-  //     T >> _get<T, bool>(const char *data, const uint16_t bytes_offset) const
-  //     {
-  //   std::string d;
-  //   uint8_t string_size = UnalignedLoad8(data);
-
-  //   d.reserve(string_size);
-  //   uint8_t c;
-  //   for (size_t i = 0; i < string_size; ++i) {
-  //     c = _get<uint8_t>(data, 8, bytes_offset + i + 1);
-  //     d.push_back(c);
-  //   }
-  //   return d;
-  // }
+  template <typename T>
+  inline typename std::enable_if<
+      IsVectorType<T>::value &&
+          std::is_same<typename T::value_type, std::string>::value,
+      bool>::type
+  set(char *data, const T &value) const {
+    uint8_t num = value.size();
+    if (!set<uint8_t>(data, num)) {
+      return false;
+    }
+    uint32_t offset = 1; // 1 byte for num
+    for (int i = 0; i < num; i++) {
+      if (!set<std::string>(data + offset, value[i])) {
+        return false;
+      }
+      offset += value[i].size() + 1;
+    }
+    return true;
+  }
 };
 } // namespace index_lib
