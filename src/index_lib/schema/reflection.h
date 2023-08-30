@@ -38,30 +38,31 @@ inline constexpr bool is_number =
 class Reflection {
 public:
   template <typename T>
-  inline typename std::enable_if<is_number<T>, T>::type
-  get(const char *data) const {
+  inline static typename std::enable_if<is_number<T>, T>::type
+  get(const char *data) {
     T tmp;
     std::memcpy(&tmp, data, sizeof(T));
     return tmp;
   }
 
   template <typename T>
-  inline typename std::enable_if<is_number<T>, bool>::type
-  set(char *data, const T &value) const {
+  inline static typename std::enable_if<is_number<T>, bool>::type
+  set(char *data, const T &value) {
     return memcpy(data, &value, sizeof(value)) != nullptr;
   }
 
   template <typename T>
-  inline typename std::enable_if<std::is_same<T, std::string>::value, T>::type
-  get(const char *data) const {
+  inline static
+      typename std::enable_if<std::is_same<T, std::string>::value, T>::type
+      get(const char *data) {
     uint8_t num = get<uint8_t>(data);
     return std::string(data + 1, num);
   }
 
   template <typename T>
-  inline
+  inline static
       typename std::enable_if<std::is_same<T, std::string>::value, bool>::type
-      set(char *data, const T &value) const {
+      set(char *data, const T &value) {
     uint8_t num = value.size();
     if (!set<uint8_t>(data, num)) {
       return false;
@@ -70,9 +71,9 @@ public:
   }
 
   template <typename T>
-  inline typename std::enable_if<
+  inline static typename std::enable_if<
       IsVectorType<T>::value && is_number<typename T::value_type>, T>::type
-  get(const char *data) const {
+  get(const char *data) {
     uint8_t num = get<uint8_t>(data);
     using ET = typename T::value_type;
     std::vector<ET> ret(num);
@@ -81,9 +82,9 @@ public:
   }
 
   template <typename T>
-  inline typename std::enable_if<
+  inline static typename std::enable_if<
       IsVectorType<T>::value && is_number<typename T::value_type>, bool>::type
-  set(char *data, const T &value) const {
+  set(char *data, const T &value) {
     uint8_t num = value.size();
     if (!set<uint8_t>(data, num)) {
       return false;
@@ -93,11 +94,11 @@ public:
   }
 
   template <typename T>
-  inline typename std::enable_if<
+  inline static typename std::enable_if<
       IsVectorType<T>::value &&
           std::is_same<typename T::value_type, std::string>::value,
       T>::type
-  get(const char *data) const {
+  get(const char *data) {
     uint8_t num = get<uint8_t>(data);
     std::vector<std::string> ret(num);
     uint32_t offset = 1; // 1 byte for num
@@ -109,11 +110,11 @@ public:
   }
 
   template <typename T>
-  inline typename std::enable_if<
+  inline static typename std::enable_if<
       IsVectorType<T>::value &&
           std::is_same<typename T::value_type, std::string>::value,
       bool>::type
-  set(char *data, const T &value) const {
+  set(char *data, const T &value) {
     uint8_t num = value.size();
     if (!set<uint8_t>(data, num)) {
       return false;

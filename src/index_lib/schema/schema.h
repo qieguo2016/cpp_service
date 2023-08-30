@@ -1,8 +1,11 @@
 #pragma once
 
 #include "index_lib/schema/data_type.h"
+#include "index_lib/schema/reflection.h"
 #include "third_party/parallel_hashmap/phmap.h"
 #include <cstdint>
+#include <exception>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -17,6 +20,28 @@ struct FieldDescriptor {
   uint16_t byte_offset;
   uint16_t byte_len;
 };
+
+template <uint16_t, uint16_t, typename T = void> struct RefTypeTraits {
+  typedef T type;
+  // using type = T;
+};
+
+template <> struct RefTypeTraits<1, 2> {
+  typedef uint16_t type;
+};
+
+template <> struct RefTypeTraits<1, 3> {
+  typedef std::vector<uint16_t> type;
+};
+
+// template <typename T, typename... Types> struct IsVectorType {
+//   static const bool value = false;
+// };
+
+// template <typename T, typename... Types>
+// struct IsVectorType<std::vector<T, Types...>> {
+//   static const bool value = true;
+// };
 
 // template <typename T>
 // struct RefTypeTraits<T,
@@ -62,7 +87,15 @@ public:
     if (field_id >= field_vec_.size()) {
       return nullptr;
     }
-    return (T *)(data + field_vec_[field_id].byte_offset);
+
+    uint16_t ftype = field_vec_[field_id].ftype;
+    uint16_t dtype = field_vec_[field_id].dtype;
+
+    using ET = decltype(typeTrait<ftype, dtype>());
+    // RefTypeTraits<ftype, dtype>::type return nullptr;
+    // field_vec_[field_id].dtype;
+    // field_vec_[field_id].ftype;
+    // return reflection_.get<T>(data);
   };
 
   template <typename T>
@@ -80,19 +113,11 @@ public:
   };
 
 private:
-  // inline uint64_t ReadVarint64(const char **p) {
-  //   uint64_t tmp;
-  //   *p = VarintParse(*p, &tmp);
-  //   return tmp;
-  // }
+  template <uint16_t, uint16_t, typename T = void> T typeTrait() {
+    throw std::invalid_argument("not support field type or data type");
+  };
 
-  // inline uint8_t ReadUint8(const char **p) {
-  //   uint8_t res = static_cast<uint8_t>(p[0]);
-  //   if (res < 128) {
-  //     *pp = p + 1;
-  //     return res;
-  //   }
-  // }
+  template <> int8_t typeTrait<1, 2>() { return 0; };
 
 private:
   phmap::flat_hash_map<std::string, FieldDescriptor *> field_map_;
