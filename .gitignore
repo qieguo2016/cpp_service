@@ -34,3 +34,4 @@
 # output
 build
 core.*
+.cache
