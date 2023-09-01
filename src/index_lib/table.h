@@ -35,14 +35,18 @@ public:
   ~Table(){};
 
   bool Init() {
-    if (auto code = loadIndex(conf_.index_path); code != 0) {
-      LOG(INFO) << "load index fail, path=" << conf_.index_path
-                << ", errno=" << code;
+    if (auto code = schema_.Load(); code != 0) {
+      LOG(ERROR) << "load schema fail, path=" << conf_.schema_path
+                 << ", errno=" << code;
       return false;
     }
-    if (auto code = loadFixedData(conf_.fixed_data_path); code != 0) {
-      LOG(INFO) << "load fixed data fail, path=" << conf_.fixed_data_path
-                << ", errno=" << code;
+    if (auto ok = invert_index_.Load(); !ok) {
+      LOG(ERROR) << "load index fail, path=" << conf_.index_path;
+      return false;
+    }
+    if (auto code = fixed_mem_store_.Load(); code != 0) {
+      LOG(ERROR) << "load fixed data fail, path=" << conf_.fixed_data_path
+                 << ", errno=" << code;
       return false;
     }
     return true;
@@ -55,16 +59,17 @@ public:
       return std::nullopt;
     }
     auto row = fixed_mem_store_.GetFixedRow(doc_id);
-    return schema_.GetValue<T>(row, field_name);
+    return {schema_.GetValue<T>(row, field_name)};
   };
 
-  template <typename T> T *Get(uint64_t item_id, uint16_t field_id) {
+  template <typename T>
+  std::optional<T> Get(uint64_t item_id, uint16_t field_id) {
     uint32_t doc_id = invert_index_.GetDocId(item_id);
     if (doc_id == kInvalidDocId) {
       return std::nullopt;
     }
     auto row = fixed_mem_store_.GetFixedRow(doc_id);
-    return schema_.GetValue<T>(row, field_id);
+    return {schema_.GetValue<T>(row, field_id)};
   };
 
   template <typename T>
@@ -92,9 +97,6 @@ public:
   }
 
 private:
-  int loadIndex(const std::string &path) { invert_index_.Load(); };
-  int loadFixedData(const std::string &path) { fixed_mem_store_.Load(); };
-
   uint32_t getOrCreateDocId(uint64_t item_id) {
     uint32_t doc_id = invert_index_.GetDocId(item_id);
     if (doc_id != kInvalidDocId) {
@@ -110,12 +112,7 @@ private:
       doc_id = max_doc_id_;
     }
     invert_index_.SetDocId(item_id, doc_id);
-  }
-
-  uint32_t getRowVersion(const char *row) {
-    const std::atomic<uint32_t *> ver_ptr = (uint32_t *)row;
-    uint32_t *version =
-        std::atomic_load_explicit(ver_ptr, std::memory_order_acquire);
+    return doc_id;
   }
 
 private:

@@ -1,5 +1,6 @@
+#include "index_lib/meta.h"
 #include "index_lib/schema/reflection.h"
-// #include "index_lib/table.h"
+#include "index_lib/table.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -12,25 +13,6 @@
 
 using namespace index_lib;
 
-// TEST(INDEX_LIB, segment_get_set) {
-//   std::cout << "simple_get_set, path=./segment_test";
-//   Table t(1024, 8);
-//   auto ok = t.load("./segment_test");
-//   std::cout << "load: " << ok << std::endl;
-//   t.set(0, 10000);
-//   std::cout << "row 0 set" << std::endl;
-//   std::cout << "row 0: " << *t.get<u_int64_t>(0) << std::endl;
-//   t.set(1, 10001);
-//   std::cout << "row 1: " << *t.get<u_int64_t>(1) << std::endl;
-//   t.set(10, 10010);
-//   t.set(10, 20010);
-//   std::cout << "row 10: " << *t.get<u_int64_t>(10) << std::endl;
-// }
-
-// TEST(INDEX_LIB, schema_test) {
-//   std::cout << "schema_test, schema path=./schema.json";
-// //   std::cout << "row 10: " << *t.get<u_int64_t>(10) << std::endl;
-// }
 template <typename T>
 typename std::enable_if<is_number<typename T::value_type>, std::string>::type
 print_vec(const T &vec) {
@@ -204,6 +186,20 @@ TEST(INDEX_LIB, reflection_test) {
             << ", get: " << (index_lib::Reflection::get<int64_t>(cur) == 0)
             << std::endl;
   cur += sizeof(int64_t);
+}
+
+TEST(INDEX_LIB, table) {
+  std::cout << "table test";
+  TableConf conf{"", "./schema", 0, 100, "./fixed_data", 64 * 16, 64};
+  Table t(conf);
+  auto ok = t.Init();
+  std::cout << "load: " << ok << std::endl;
+  t.Set((uint64_t)12345, (uint16_t)0, (uint64_t)12345);
+  t.Set((uint64_t)12345, (uint16_t)1, std::string("hello"));
+  std::cout << "row 12345, 0: " << t.Get<uint64_t>(12345, 0).value()
+            << std::endl;
+  std::cout << "row 12345, 1: " << t.Get<uint64_t>(12345, 1).value()
+            << std::endl;
 }
 
 int main(int argc, char *argv[]) {

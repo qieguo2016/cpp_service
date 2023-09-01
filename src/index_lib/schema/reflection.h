@@ -16,19 +16,6 @@ namespace index_lib {
 //     tmp = bswap_64(tmp);
 // #endif
 
-template <typename T, typename... Types> struct IsVectorType {
-  static const bool value = false;
-};
-
-template <typename T, typename... Types>
-struct IsVectorType<std::vector<T, Types...>> {
-  static const bool value = true;
-};
-
-template <typename T>
-inline constexpr bool is_number =
-    std::is_integral<T>::value || std::is_floating_point<T>::value;
-
 /*
  * Reflection
  * 1. 列表最大长度为255(uint8)
