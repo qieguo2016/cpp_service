@@ -47,7 +47,7 @@ public:
       return std::nullopt;
     }
     FieldDescriptor *field = it->second;
-    if (checkType<T>(field->ftype, field->dtype)) {
+    if (!checkType<T>(field->ftype, field->dtype)) {
       LOG(ERROR) << "field type unmatch, field_name: " << field_name
                  << ", template_type: " << typeid(T).name();
       return std::nullopt;
@@ -62,7 +62,7 @@ public:
       return std::nullopt;
     }
     FieldDescriptor &field = field_vec_[field_id];
-    if (checkType<T>(field.ftype, field.dtype)) {
+    if (!checkType<T>(field.ftype, field.dtype)) {
       LOG(ERROR) << "field type unmatch, field_id: " << field_id
                  << ", template_type: " << typeid(T).name();
       return std::nullopt;
@@ -78,7 +78,7 @@ public:
       return false;
     }
     FieldDescriptor *field = it->second;
-    if (checkType<T>(field->ftype, field->dtype)) {
+    if (!checkType<T>(field->ftype, field->dtype)) {
       LOG(ERROR) << "field type unmatch, field_name: " << field_name
                  << ", template_type: " << typeid(T).name();
       return false;
@@ -93,7 +93,7 @@ public:
       return false;
     }
     FieldDescriptor &field = field_vec_[field_id];
-    if (checkType<T>(field.ftype, field.dtype)) {
+    if (!checkType<T>(field.ftype, field.dtype)) {
       LOG(ERROR) << "field type unmatch, field_id: " << field_id
                  << ", template_type: " << typeid(T).name();
       return false;
@@ -104,7 +104,7 @@ public:
 private:
   template <typename T>
   inline bool checkType(FieldType ftype, DataType dtype) const {
-    if (IsVectorType<T>::value) {
+    if constexpr (is_vector_v<T>) {
       if (ftype != FieldType::ARRAY && ftype != FieldType::VECTOR) {
         return false;
       }

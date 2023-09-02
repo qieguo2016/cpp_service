@@ -3,7 +3,9 @@
 #include "mmap_helper.h"
 #include <cstdio>
 #include <fcntl.h>
+#include <glog/logging.h>
 #include <iostream>
+#include <mutex>
 #include <ostream>
 #include <string>
 #include <sys/mman.h>
@@ -12,6 +14,8 @@
 #include <unistd.h>
 
 namespace index_lib {
+constexpr static size_t kMemIncStep = (1UL << 26); // 64MB
+
 class FixedMemStore {
 public:
   FixedMemStore(std::string path, int file_size, int row_size)
@@ -30,7 +34,16 @@ public:
   }
 
   inline char *GetMutableFixedRow(const u_int32_t doc_id) {
-    return (char *)data_ + doc_id * row_size_;
+    int tmp = doc_id * row_size_;
+    while (tmp >= file_size_) { // 需要扩容，尽量在离线预估好buff
+      std::lock_guard<std::mutex> lg(lock_);
+      file_size_ += kMemIncStep;
+      if (ftruncate(fd_, file_size_) == -1) {
+        LOG(ERROR) << "FixedMemStore ftruncate fail";
+        break;
+      }
+    }
+    return (char *)data_ + tmp;
   }
 
   // todo: use write mode flag, online reading no write back to file
@@ -39,12 +52,10 @@ public:
     if (fd_ == -1) {
       return -1;
     }
-
     if (ftruncate(fd_, file_size_) == -1) {
-      std::cerr << "ftruncate fail" << std::endl;
+      LOG(ERROR) << "ftruncate fail";
       return -1;
     }
-
     // todo: enable hugetlb use gflag
     int err = mmap_helper(&data_, nullptr, file_size_, PROT_READ | PROT_WRITE,
                           MAP_LOCKED | MAP_SHARED | MAP_POPULATE, fd_, 0);
@@ -54,11 +65,20 @@ public:
     return 0;
   };
 
+  int Dump() {
+    if (msync(data_, file_size_, MS_SYNC) == -1) {
+      LOG(WARNING) << "sync file error:" << errno;
+      return -1;
+    }
+    return 0;
+  };
+
 private:
   std::string path_;
   int file_size_; // in byte
   int row_size_;  // in byte
   int fd_;
+  std::mutex lock_;
   void *data_;
 };
 } // namespace index_lib

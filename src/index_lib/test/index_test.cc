@@ -14,7 +14,7 @@
 using namespace index_lib;
 
 template <typename T>
-typename std::enable_if<is_number<typename T::value_type>, std::string>::type
+typename std::enable_if<is_number_v<typename T::value_type>, std::string>::type
 print_vec(const T &vec) {
   std::string ret;
   for (const auto el : vec) {
@@ -76,7 +76,7 @@ template <typename T> void test_float(char *cur) {
             << ", res: " << print_vec<std::vector<T>>(res) << std::endl;
 }
 
-TEST(INDEX_LIB, reflection_test) {
+TEST(reflection_test, INDEX_LIB) {
   srand((unsigned)time(NULL));
   std::cout << "reflection_test" << std::endl;
   char *buf = new char[10000];
@@ -188,21 +188,37 @@ TEST(INDEX_LIB, reflection_test) {
   cur += sizeof(int64_t);
 }
 
-TEST(INDEX_LIB, table) {
-  std::cout << "table test";
-  TableConf conf{"", "./schema", 0, 100, "./fixed_data", 64 * 16, 64};
+TEST(table, INDEX_LIB) {
+  std::cout << "table test\n";
+  TableConf conf{"schema", "index_data", 0, 100, "fixed_data", 64 * 16, 64};
   Table t(conf);
-  auto ok = t.Init();
-  std::cout << "load: " << ok << std::endl;
-  t.Set((uint64_t)12345, (uint16_t)0, (uint64_t)12345);
-  t.Set((uint64_t)12345, (uint16_t)1, std::string("hello"));
+  std::cout << "Init : " << t.Load() << std::endl;
+  // t.Set((uint64_t)12345, (uint16_t)0, (uint64_t)12345);
+  // t.Set((uint64_t)12345, (uint16_t)1, std::string("hello"));
   std::cout << "row 12345, 0: " << t.Get<uint64_t>(12345, 0).value()
             << std::endl;
-  std::cout << "row 12345, 1: " << t.Get<uint64_t>(12345, 1).value()
+  std::cout << "row 12345, 1: " << t.Get<std::string>(12345, 1).value()
             << std::endl;
+  std::cout << "row 321654, 0: " << t.Get<uint64_t>(321654, 0).value_or(1)
+            << std::endl;
+  std::cout << "row 321654, 1: "
+            << t.Get<std::string>(321654, 1).value_or("notfound") << std::endl;
+  std::cout << "Dump : " << t.Dump() << std::endl;
+}
+
+TEST(debug, INDEX_LIB) {
+  uint8_t a = 0;
+  for (int i = 0; i < 1000; i++) {
+    a++;
+    std::cout << std::to_string(a) << ",";
+  }
+  std::cout << std::endl;
 }
 
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
+  google::ParseCommandLineFlags(&argc, &argv, false);
+  google::InitGoogleLogging("index_test");
+  google::SetStderrLogging(google::GLOG_INFO);
   return RUN_ALL_TESTS();
 }

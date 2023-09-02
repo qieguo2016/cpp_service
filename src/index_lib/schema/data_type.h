@@ -21,25 +21,17 @@ enum FieldType {
   VECTOR = 2,
 };
 
-template <typename T, typename... Types> struct IsVectorType {
-  static const bool value = false;
-};
-
-template <typename T, typename... Types>
-struct IsVectorType<std::vector<T, Types...>> {
-  static const bool value = true;
-};
-
-// template <typename C> struct is_vector : std::false_type {};    
-// template <typename T,typename A> struct is_vector<std::vector<T,A> > : std::true_type {};    
-// template <typename C> inline constexpr bool is_vector_v = is_vector<C>::value;
+template <typename C> struct is_vector : std::false_type {};
+template <typename T, typename A>
+struct is_vector<std::vector<T, A>> : std::true_type {};
+template <typename C> inline constexpr bool is_vector_v = is_vector<C>::value;
 
 template <typename T>
-inline constexpr bool is_number =
+inline constexpr bool is_number_v =
     std::is_integral<T>::value || std::is_floating_point<T>::value;
 
 template <typename T> struct DataTypeTraits {
-  static const DataType data_type = DT_UNKNOWN;
+  static_assert(true, "Specified Data Type not supported");
 };
 
 template <> struct DataTypeTraits<int8_t> {

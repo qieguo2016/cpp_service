@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gflags/gflags.h"
 #include "index/index.h"
 #include "index_lib/store/fixed_mem_store.h"
 #include "meta.h"
@@ -34,7 +35,7 @@ public:
         max_doc_id_(conf.max_doc_id){};
   ~Table(){};
 
-  bool Init() {
+  bool Load() {
     if (auto code = schema_.Load(); code != 0) {
       LOG(ERROR) << "load schema fail, path=" << conf_.schema_path
                  << ", errno=" << code;
@@ -46,6 +47,19 @@ public:
     }
     if (auto code = fixed_mem_store_.Load(); code != 0) {
       LOG(ERROR) << "load fixed data fail, path=" << conf_.fixed_data_path
+                 << ", errno=" << code;
+      return false;
+    }
+    return true;
+  };
+
+  bool Dump() {
+    if (auto ok = invert_index_.Dump(); !ok) {
+      LOG(ERROR) << "dump index fail, path=" << conf_.index_path;
+      return false;
+    }
+    if (auto code = fixed_mem_store_.Dump(); code != 0) {
+      LOG(ERROR) << "dump fixed data fail, path=" << conf_.fixed_data_path
                  << ", errno=" << code;
       return false;
     }
@@ -107,6 +121,7 @@ private:
     }
     {
       // add new
+      // todo: 增加新doc的时候，整行重置默认值
       std::lock_guard<std::mutex> lg(doc_id_mutex_);
       max_doc_id_++;
       doc_id = max_doc_id_;

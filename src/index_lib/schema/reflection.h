@@ -25,7 +25,7 @@ namespace index_lib {
 class Reflection {
 public:
   template <typename T>
-  inline static typename std::enable_if<is_number<T>, T>::type
+  inline static typename std::enable_if<is_number_v<T>, T>::type
   get(const char *data) {
     T tmp;
     std::memcpy(&tmp, data, sizeof(T));
@@ -33,7 +33,7 @@ public:
   }
 
   template <typename T>
-  inline static typename std::enable_if<is_number<T>, bool>::type
+  inline static typename std::enable_if<is_number_v<T>, bool>::type
   set(char *data, const T &value) {
     return memcpy(data, &value, sizeof(value)) != nullptr;
   }
@@ -59,7 +59,7 @@ public:
 
   template <typename T>
   inline static typename std::enable_if<
-      IsVectorType<T>::value && is_number<typename T::value_type>, T>::type
+      is_vector_v<T> && is_number_v<typename T::value_type>, T>::type
   get(const char *data) {
     uint8_t num = get<uint8_t>(data);
     using ET = typename T::value_type;
@@ -70,7 +70,7 @@ public:
 
   template <typename T>
   inline static typename std::enable_if<
-      IsVectorType<T>::value && is_number<typename T::value_type>, bool>::type
+      is_vector_v<T> && is_number_v<typename T::value_type>, bool>::type
   set(char *data, const T &value) {
     uint8_t num = value.size();
     if (!set<uint8_t>(data, num)) {
@@ -82,7 +82,7 @@ public:
 
   template <typename T>
   inline static typename std::enable_if<
-      IsVectorType<T>::value &&
+      is_vector_v<T> &&
           std::is_same<typename T::value_type, std::string>::value,
       T>::type
   get(const char *data) {
@@ -98,7 +98,7 @@ public:
 
   template <typename T>
   inline static typename std::enable_if<
-      IsVectorType<T>::value &&
+      is_vector_v<T> &&
           std::is_same<typename T::value_type, std::string>::value,
       bool>::type
   set(char *data, const T &value) {

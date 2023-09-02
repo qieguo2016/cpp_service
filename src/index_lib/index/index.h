@@ -3,12 +3,22 @@
 #include "third_party/parallel_hashmap/phmap.h"
 #include "third_party/parallel_hashmap/phmap_dump.h"
 #include <cstdint>
+#include <gflags/gflags.h>
 #include <optional>
 #include <string>
+
+DEFINE_string(index_mode, "write",
+              "index mode: {write, query, build, validate}");
 
 namespace index_lib {
 
 static const uint32_t kInvalidDocId = static_cast<uint32_t>(-1);
+
+struct IndexVal {
+  uint32_t fix_addr;
+  uint32_t var_addr;
+  uint16_t version;  // 循环使用
+};
 
 class InvertIndex {
 public:
