@@ -44,7 +44,6 @@ RUN cd /opt \
         && python get-pip.py \
         && ln -s /usr/local/bin/pip /usr/bin/pip \
         && mkdir ~/.pip \
-        && echo "[global]\nindex-url = https://pypi.garenanow.com/\n[install]\ntrusted-host=pypi.garenanow.com" >> ~/.pip/pip.conf \
         && rm get-pip.py \
         && pip install "urllib3<=1.23"
 
