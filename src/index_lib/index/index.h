@@ -2,22 +2,21 @@
 
 #include "third_party/parallel_hashmap/phmap.h"
 #include "third_party/parallel_hashmap/phmap_dump.h"
+#include <atomic>
 #include <cstdint>
 #include <gflags/gflags.h>
 #include <optional>
 #include <string>
-
-DEFINE_string(index_mode, "write",
-              "index mode: {write, query, build, validate}");
+#include <unistd.h>
 
 namespace index_lib {
 
-static const uint32_t kInvalidDocId = static_cast<uint32_t>(-1);
-
-struct IndexVal {
-  uint32_t fix_addr;
+struct DocInfo {
+  uint32_t doc_id;
   uint32_t var_addr;
-  uint16_t version;  // 循环使用
+  std::atomic<uint32_t> version; // 循环使用
+  DocInfo(uint32_t doc_id, uint32_t var_addr, uint32_t version)
+      : doc_id(doc_id), var_addr(var_addr), version(version) {}
 };
 
 class InvertIndex {
@@ -26,8 +25,11 @@ public:
   ~InvertIndex(){};
 
   bool Load() {
-    phmap::BinaryInputArchive ar_in(path_.c_str());
-    return index_.phmap_load(ar_in);
+    if (access(path_.c_str(), 4) == 0) {
+      phmap::BinaryInputArchive ar_in(path_.c_str());
+      return index_.phmap_load(ar_in);
+    }
+    return true;
   };
 
   bool Dump() {
@@ -35,22 +37,35 @@ public:
     return index_.phmap_dump(ar_out);
   };
 
-  uint32_t GetDocId(uint64_t item_id) {
+  DocInfo *GetDoc(uint64_t item_id) {
     auto it = index_.find(item_id);
     if (it == index_.end()) {
-      return kInvalidDocId;
+      return nullptr;
     }
-    return it->second;
+    return &it->second;
   };
-  bool SetDocId(uint64_t item_id, uint32_t doc_id) {
-    auto ret = index_.emplace(item_id, doc_id);
-    return ret.second;
+
+  // return nullptr if item_id exist
+  DocInfo *AddDoc(uint64_t item_id, uint32_t doc_id) {
+    auto ret = index_.emplace(item_id, doc_id, 0, 0);
+    if (!ret.second || ret.first == index_.end()) {
+      return nullptr;
+    }
+    return &ret.first->second;
+  };
+
+  DocInfo *AddDoc(uint64_t item_id, uint32_t doc_id, uint32_t var_addr,
+                  uint32_t version) {
+    auto ret = index_.emplace(item_id, doc_id, var_addr, version);
+    if (!ret.second || ret.first == index_.end()) {
+      return nullptr;
+    }
+    return &ret.first->second;
   };
 
 private:
   std::string path_;
-  phmap::parallel_flat_hash_map<uint64_t, uint32_t> index_;
+  phmap::parallel_flat_hash_map<uint64_t, DocInfo> index_;
 };
 
-class RevertIndex {};
 } // namespace index_lib

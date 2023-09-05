@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 
+DEFINE_string(index_mode, "normal", "build: only write, normal: read & update");
+
 namespace index_lib {
 
 /*
@@ -25,6 +27,8 @@ namespace index_lib {
  * 4. mget接口或整行获取接口，mset或者整行设置接口
  * 5. 支持变长字段
  */
+
+static const uint32_t kInvalidDocId = static_cast<uint32_t>(-1);
 
 class Table {
 public:
@@ -66,68 +70,100 @@ public:
     return true;
   };
 
+  // get
+  // 1. 自旋等待version变为偶数，然后执行2
+  // 2. copy数据并检查version是否变化，如果version有变化，则跳回1
+
+  // set
+  // 1. 自旋等待version变为偶数
+  // 2. 然后cas+1(不能fetch_add)，cas失败则跳回1
+  // 3. 写数据后cas+1，理论上不会失败，失败报错
+
   template <typename T>
   std::optional<T> Get(uint64_t item_id, const std::string &field_name) {
-    uint32_t doc_id = invert_index_.GetDocId(item_id);
-    if (doc_id == kInvalidDocId) {
+    auto doc = invert_index_.GetDoc(item_id);
+    if (doc == nullptr) {
       return std::nullopt;
     }
-    auto row = fixed_mem_store_.GetFixedRow(doc_id);
+    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
     return {schema_.GetValue<T>(row, field_name)};
   };
 
   template <typename T>
   std::optional<T> Get(uint64_t item_id, uint16_t field_id) {
-    uint32_t doc_id = invert_index_.GetDocId(item_id);
-    if (doc_id == kInvalidDocId) {
+    auto doc = invert_index_.GetDoc(item_id);
+    if (doc == nullptr) {
       return std::nullopt;
     }
-    auto row = fixed_mem_store_.GetFixedRow(doc_id);
-    return {schema_.GetValue<T>(row, field_id)};
+
+    uint32_t ver1, ver2;
+    std::optional<T> ret;
+    int count = 10;
+    while (count > 0) {
+      ver1 = spinWaitWriting(doc, 10); // 自旋10次
+      if (ver1 & 1) {
+        LOG(ERROR) << "spinWaitWriting in get handler timeout, item_id="
+                   << item_id;
+        return std::nullopt;
+      }
+      auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
+      ret = schema_.GetValue<T>(row, field_id);
+      ver2 = doc->version.load(std::memory_order_acquire);
+      if (ver1 == ver2) {
+        return ret;
+      }
+      count--;
+    };
+    return std::nullopt;
   };
 
   template <typename T>
   bool Set(uint64_t item_id, const std::string &field_name, const T &value) {
-    uint32_t doc_id = getOrCreateDocId(item_id);
-    if (doc_id == kInvalidDocId) {
-      LOG_EVERY_N(ERROR, 100)
-          << "add_doc_id fail, table_size_limit: " << conf_.table_size_limit;
+    DocInfo *doc = getOrCreateDoc(item_id);
+    if (doc == nullptr) {
+      LOG_EVERY_N(ERROR, 100) << "getOrCreateDoc fail, table_size_limit: "
+                              << conf_.table_size_limit;
       return false;
     }
-    auto row = fixed_mem_store_.GetMutableFixedRow(doc_id);
+    auto row = fixed_mem_store_.GetMutableFixedRow(doc->doc_id);
     return schema_.SetValue<T>(row, field_name, value);
   }
 
   template <typename T>
   bool Set(uint64_t item_id, uint16_t field_id, const T &value) {
-    uint32_t doc_id = getOrCreateDocId(item_id);
-    if (doc_id == kInvalidDocId) {
-      LOG_EVERY_N(ERROR, 100)
-          << "add_doc_id fail, table_size_limit: " << conf_.table_size_limit;
+    DocInfo *doc = getOrCreateDoc(item_id);
+    if (doc == nullptr) {
+      LOG_EVERY_N(ERROR, 100) << "getOrCreateDoc fail, table_size_limit: "
+                              << conf_.table_size_limit;
       return false;
     }
-    auto row = fixed_mem_store_.GetMutableFixedRow(doc_id);
+    auto row = fixed_mem_store_.GetMutableFixedRow(doc->doc_id);
     return schema_.SetValue<T>(row, field_id, value);
   }
 
 private:
-  uint32_t getOrCreateDocId(uint64_t item_id) {
-    uint32_t doc_id = invert_index_.GetDocId(item_id);
-    if (doc_id != kInvalidDocId) {
-      return doc_id;
+  DocInfo *getOrCreateDoc(uint64_t item_id) {
+    auto doc = invert_index_.GetDoc(item_id);
+    if (doc != nullptr) {
+      return doc;
     }
+    // 用table_size_limit来保证无rehash，从而避免读时加锁
     if (max_doc_id_ >= conf_.table_size_limit) {
-      return kInvalidDocId;
+      return nullptr;
     }
-    {
-      // add new
-      // todo: 增加新doc的时候，整行重置默认值
-      std::lock_guard<std::mutex> lg(doc_id_mutex_);
-      max_doc_id_++;
-      doc_id = max_doc_id_;
-    }
-    invert_index_.SetDocId(item_id, doc_id);
-    return doc_id;
+    // todo: 增加新doc的时候，整行重置默认值
+    std::lock_guard<std::mutex> lg(index_mutex_);
+    max_doc_id_++;
+    return invert_index_.AddDoc(item_id, max_doc_id_, 0, 1);
+  }
+
+  uint32_t spinWaitWriting(DocInfo *doc, int count) {
+    uint32_t ver;
+    do {
+      ver = doc->version.load(std::memory_order_acquire);
+      count--;
+    } while (ver & 1 && count > 0);
+    return ver;
   }
 
 private:
@@ -136,7 +172,7 @@ private:
   InvertIndex invert_index_;
   FixedMemStore fixed_mem_store_;
   uint32_t max_doc_id_;
-  std::mutex doc_id_mutex_;
+  std::mutex index_mutex_;
 };
 
 } // namespace index_lib
