@@ -2,6 +2,7 @@
 
 #include "gflags/gflags.h"
 #include "index/index.h"
+#include "index_lib/row.h"
 #include "index_lib/store/fixed_mem_store.h"
 #include "meta.h"
 #include "schema/schema.h"
@@ -96,26 +97,39 @@ public:
       return std::nullopt;
     }
 
-    uint32_t ver1, ver2;
-    std::optional<T> ret;
-    int count = 10;
-    while (count > 0) {
-      ver1 = spinWaitWriting(doc, 10); // 自旋10次
-      if (ver1 & 1) {
-        LOG(ERROR) << "spinWaitWriting in get handler timeout, item_id="
-                   << item_id;
-        return std::nullopt;
-      }
-      auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
-      ret = schema_.GetValue<T>(row, field_id);
-      ver2 = doc->version.load(std::memory_order_acquire);
-      if (ver1 == ver2) {
-        return ret;
-      }
-      count--;
-    };
-    return std::nullopt;
+    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
+    return {schema_.GetValue<T>(row, field_id)};
+    // uint32_t ver1, ver2;
+    // std::optional<T> ret;
+    // int count = 10;
+    // while (count > 0) {
+    //   ver1 = spinWaitWriting(doc, 10); // 自旋10次
+    //   if (ver1 & 1) {
+    //     LOG(ERROR) << "spinWaitWriting in get handler timeout, item_id="
+    //                << item_id;
+    //     return std::nullopt;
+    //   }
+    //   auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
+    //   ret = schema_.GetValue<T>(row, field_id);
+    //   ver2 = doc->version.load(std::memory_order_acquire);
+    //   if (ver1 == ver2) {
+    //     return ret;
+    //   }
+    //   count--;
+    // };
+    // return std::nullopt;
   };
+
+  std::optional<Row> Get(uint64_t item_id) {
+    auto doc = invert_index_.GetDoc(item_id);
+    if (doc == nullptr) {
+      return std::nullopt;
+    }
+
+    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
+    row.
+    // return {Row(schema_, row)};
+  }
 
   template <typename T>
   bool Set(uint64_t item_id, const std::string &field_name, const T &value) {
@@ -157,14 +171,14 @@ private:
     return invert_index_.AddDoc(item_id, max_doc_id_, 0, 1);
   }
 
-  uint32_t spinWaitWriting(DocInfo *doc, int count) {
-    uint32_t ver;
-    do {
-      ver = doc->version.load(std::memory_order_acquire);
-      count--;
-    } while (ver & 1 && count > 0);
-    return ver;
-  }
+  // uint32_t spinWaitWriting(DocInfo *doc, int count) {
+  //   uint32_t ver;
+  //   do {
+  //     ver = std::atomic_load(&doc->version, std::memory_order_acquire);
+  //     count--;
+  //   } while (ver & 1 && count > 0);
+  //   return ver;
+  // }
 
 private:
   TableConf conf_;

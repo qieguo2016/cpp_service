@@ -14,9 +14,7 @@ namespace index_lib {
 struct DocInfo {
   uint32_t doc_id;
   uint32_t var_addr;
-  std::atomic<uint32_t> version; // 循环使用
-  DocInfo(uint32_t doc_id, uint32_t var_addr, uint32_t version)
-      : doc_id(doc_id), var_addr(var_addr), version(version) {}
+  uint32_t version; // 循环使用
 };
 
 class InvertIndex {
@@ -47,7 +45,7 @@ public:
 
   // return nullptr if item_id exist
   DocInfo *AddDoc(uint64_t item_id, uint32_t doc_id) {
-    auto ret = index_.emplace(item_id, doc_id, 0, 0);
+    auto ret = index_.emplace(item_id, DocInfo{doc_id, 0, 0});
     if (!ret.second || ret.first == index_.end()) {
       return nullptr;
     }
@@ -56,7 +54,7 @@ public:
 
   DocInfo *AddDoc(uint64_t item_id, uint32_t doc_id, uint32_t var_addr,
                   uint32_t version) {
-    auto ret = index_.emplace(item_id, doc_id, var_addr, version);
+    auto ret = index_.emplace(item_id, DocInfo{doc_id, var_addr, version});
     if (!ret.second || ret.first == index_.end()) {
       return nullptr;
     }
