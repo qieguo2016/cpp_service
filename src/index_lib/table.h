@@ -29,8 +29,6 @@ namespace index_lib {
  * 5. 支持变长字段
  */
 
-static const uint32_t kInvalidDocId = static_cast<uint32_t>(-1);
-
 class Table {
 public:
   Table(const TableConf &conf)
@@ -82,23 +80,23 @@ public:
 
   template <typename T>
   std::optional<T> Get(uint64_t item_id, const std::string &field_name) {
-    auto doc = invert_index_.GetDoc(item_id);
-    if (doc == nullptr) {
+    uint32_t doc_id = invert_index_.GetDoc(item_id);
+    if (doc_id == kInvalidDocId) {
       return std::nullopt;
     }
-    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
-    return {schema_.GetValue<T>(row, field_name)};
+    auto row = fixed_mem_store_.GetFixedRow(doc_id);
+    return schema_.GetValue<T>(row, field_name);
   };
 
   template <typename T>
   std::optional<T> Get(uint64_t item_id, uint16_t field_id) {
-    auto doc = invert_index_.GetDoc(item_id);
-    if (doc == nullptr) {
+    uint32_t doc_id = invert_index_.GetDoc(item_id);
+    if (doc_id == kInvalidDocId) {
       return std::nullopt;
     }
 
-    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
-    return {schema_.GetValue<T>(row, field_id)};
+    auto row = fixed_mem_store_.GetFixedRow(doc_id);
+    return schema_.GetValue<T>(row, field_id);
     // uint32_t ver1, ver2;
     // std::optional<T> ret;
     // int count = 10;
@@ -121,49 +119,58 @@ public:
   };
 
   std::optional<Row> Get(uint64_t item_id) {
-    auto doc = invert_index_.GetDoc(item_id);
-    if (doc == nullptr) {
+    uint32_t doc_id = invert_index_.GetDoc(item_id);
+    if (doc_id == kInvalidDocId) {
       return std::nullopt;
     }
 
-    auto row = fixed_mem_store_.GetFixedRow(doc->doc_id);
-    row.
-    // return {Row(schema_, row)};
+    auto row = fixed_mem_store_.GetFixedRow(doc_id);
+    return {Row(schema_, row, fixed_mem_store_.GetRowSize())};
   }
 
   template <typename T>
   bool Set(uint64_t item_id, const std::string &field_name, const T &value) {
-    DocInfo *doc = getOrCreateDoc(item_id);
-    if (doc == nullptr) {
-      LOG_EVERY_N(ERROR, 100) << "getOrCreateDoc fail, table_size_limit: "
-                              << conf_.table_size_limit;
+    uint32_t doc_id = getOrCreateDoc(item_id);
+    if (doc_id == kInvalidDocId) {
+      LOG(ERROR) << "getOrCreateDoc fail, item_id=" << item_id;
       return false;
     }
-    auto row = fixed_mem_store_.GetMutableFixedRow(doc->doc_id);
+    auto row = fixed_mem_store_.GetMutableFixedRow(doc_id);
     return schema_.SetValue<T>(row, field_name, value);
   }
 
   template <typename T>
   bool Set(uint64_t item_id, uint16_t field_id, const T &value) {
-    DocInfo *doc = getOrCreateDoc(item_id);
-    if (doc == nullptr) {
-      LOG_EVERY_N(ERROR, 100) << "getOrCreateDoc fail, table_size_limit: "
-                              << conf_.table_size_limit;
+    uint32_t doc_id = getOrCreateDoc(item_id);
+    if (doc_id == kInvalidDocId) {
+      LOG(ERROR) << "getOrCreateDoc fail, item_id=" << item_id;
       return false;
     }
-    auto row = fixed_mem_store_.GetMutableFixedRow(doc->doc_id);
+    auto row = fixed_mem_store_.GetMutableFixedRow(doc_id);
     return schema_.SetValue<T>(row, field_id, value);
   }
 
+  bool Set(uint64_t item_id, const Row &input) {
+    uint32_t doc_id = invert_index_.GetDoc(item_id);
+    if (doc_id == kInvalidDocId) {
+      LOG(ERROR) << "getOrCreateDoc fail, item_id=" << item_id;
+      return false;
+    }
+
+    auto dest = fixed_mem_store_.GetMutableFixedRow(doc_id);
+    memcpy(dest, input.GetData(), fixed_mem_store_.GetRowSize());
+    return true;
+  }
+
 private:
-  DocInfo *getOrCreateDoc(uint64_t item_id) {
-    auto doc = invert_index_.GetDoc(item_id);
-    if (doc != nullptr) {
-      return doc;
+  uint32_t getOrCreateDoc(uint64_t item_id) {
+    uint32_t doc_id = invert_index_.GetDoc(item_id);
+    if (doc_id != kInvalidDocId) {
+      return doc_id;
     }
     // 用table_size_limit来保证无rehash，从而避免读时加锁
     if (max_doc_id_ >= conf_.table_size_limit) {
-      return nullptr;
+      return kInvalidDocId;
     }
     // todo: 增加新doc的时候，整行重置默认值
     std::lock_guard<std::mutex> lg(index_mutex_);

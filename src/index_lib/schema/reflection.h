@@ -28,14 +28,15 @@ public:
   inline static typename std::enable_if<is_number_v<T>, T>::type
   get(const char *data) {
     T tmp;
-    std::memcpy(&tmp, data, sizeof(T));
+    memcpy(&tmp, data, sizeof(T));
     return tmp;
   }
 
   template <typename T>
   inline static typename std::enable_if<is_number_v<T>, bool>::type
   set(char *data, const T &value) {
-    return memcpy(data, &value, sizeof(value)) != nullptr;
+    memcpy(data, &value, sizeof(value));
+    return true;
   }
 
   template <typename T>
@@ -54,7 +55,8 @@ public:
     if (!set<uint8_t>(data, num)) {
       return false;
     }
-    return memcpy(data + 1, value.c_str(), num) != nullptr;
+    memcpy(data + 1, value.c_str(), num);
+    return true;
   }
 
   template <typename T>
@@ -77,7 +79,8 @@ public:
       return false;
     }
     using ET = typename T::value_type;
-    return memcpy(data + 1, value.data(), num * sizeof(ET)) != nullptr;
+    memcpy(data + 1, value.data(), num * sizeof(ET));
+    return true;
   }
 
   template <typename T>

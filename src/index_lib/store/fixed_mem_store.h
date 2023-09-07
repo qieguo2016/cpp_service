@@ -1,6 +1,8 @@
 #pragma once
 
+#include "index_lib/defines.h"
 #include "mmap_helper.h"
+#include <cstddef>
 #include <cstdio>
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -14,7 +16,6 @@
 #include <unistd.h>
 
 namespace index_lib {
-constexpr static size_t kMemIncStep = (1UL << 26); // 64MB
 
 class FixedMemStore {
 public:
@@ -72,6 +73,8 @@ public:
     }
     return 0;
   };
+
+  inline int GetRowSize() { return row_size_; };
 
 private:
   std::string path_;
